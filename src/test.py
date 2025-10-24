@@ -1,2 +1,2 @@
-import utlralytics
-import cv 
+import ultralytics
+import cv
