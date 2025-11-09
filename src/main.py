@@ -1,18 +1,23 @@
-from .tts.talker import talker
+import os, sys
+
+# make sure we can import src.vision and src.tts when running `python -m src.main`
+CURRENT_DIR = os.path.dirname(__file__)
+sys.path.append(CURRENT_DIR)
+
+from tts.talker import talker
+from vision.object import run_object_detection
+
+def handle_detected_object(label: str):
+    if label[len(label) - 1] == 's':
+        sentence = f"I am looking at {label}"
+    else:
+        sentence = f"I am looking at a {label}"
+    talker(sentence)
 
 def main():
-    #print("System ready. Say 'Hey Visda' to start")
+    print("System starting...")
 
-    obj = "Okay Garmin. Video spizer"
-
-    talker(obj)
-    
-    # while True:
-        # wait_for_wake_word() (Hey Visda)
-        
-        # obj = detect_object()
-
-        # talker(obj)
+    run_object_detection(on_detect=handle_detected_object)
 
 if __name__ == "__main__":
     main()
