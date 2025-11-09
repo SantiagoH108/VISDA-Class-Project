@@ -7,7 +7,7 @@ RES = (640, 480)
 
 def open_logitech():
     for idx in [0,1,2]:
-        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+        cap = cv2.VideoCapture(idx, cv2.CAP_ANY)
         if cap.isOpened():
             fourcc = cv2.VideoWriter.fourcc(*'MJPG')
             cap.set(cv2.CAP_PROP_FOURCC, fourcc)
