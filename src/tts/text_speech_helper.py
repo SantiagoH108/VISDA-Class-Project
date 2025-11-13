@@ -3,13 +3,13 @@ import wave
 import subprocess
 from piper import PiperVoice
 
-# Load the voice once at import time for efficiency
-_base_dir = os.path.dirname(__file__)
-_model_path = os.path.abspath(os.path.join(_base_dir, "../..", "en_US-danny-low.onnx"))
+_base_dir = os.path.dirname(__file__)  # tts/
+_model_path = os.path.abspath(os.path.join(_base_dir, "en_US-danny-low.onnx"))
 
 print(f"[TTS] Loading model from: {_model_path}")
 _voice = PiperVoice.load(_model_path)
 print("[TTS] Model loaded successfully!")
+
 
 def speak(text: str, filename: str = "output.wav", play: bool = True) -> str:
     """

@@ -7,8 +7,15 @@ dependencies:
   - pip
   - flask
   - portaudio
+  - opencv
+  - numpy
+  - libcap2
+  - libcap-dev
+  - libcamera
   - pip:
       - ultralytics
       - piper-tts
       - vosk
       - pyaudio
+      - picamera2
+    

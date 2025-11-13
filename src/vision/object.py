@@ -1,67 +1,119 @@
-import cv2, time
+# file: object.py   (was yolo_imx708.py)
+import os
+import time
+from typing import Callable, Optional
+
+import cv2
 from ultralytics import YOLO
+from picamera2 import Picamera2
 
 IMGSZ = 320
 CONF = 0.35
-RES = (640, 480)
+RES = (640, 480)      # camera output size
+SAVE_EVERY_N = 10     # when headless, save every Nth annotated frame
 
-def open_logitech():
-    for idx in [0,1,2]:
-        cap = cv2.VideoCapture(idx, cv2.CAP_ANY)
-        if cap.isOpened():
-            fourcc = cv2.VideoWriter.fourcc(*'MJPG')
-            cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, RES[0])
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, RES[1])
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            return cap
-        raise RuntimeError("No Webcam Found")
-    
-def run_object_detection(on_detect=None):
+
+def run_object_detection(
+    on_detect: Optional[Callable[[str], None]] = None,
+):
     """
-    on_detect: optional callback that receives the label string whenever
-    we get a new object
+    Main object-detection loop.
+
+    - Grabs frames from the IMX708 via Picamera2
+    - Runs YOLOv8n on each frame
+    - If `on_detect` is provided, calls it with each UNIQUE label per frame:
+        on_detect(label: str)
     """
-    cap = open_logitech()
+    have_display = bool(os.environ.get("DISPLAY"))  # false if SSH/headless
+
+    # --- Camera: IMX708 via Picamera2, request 3-channel RGB to avoid 4-channel crash ---
+    cam = Picamera2()
+    cam.configure(
+        cam.create_preview_configuration(
+            main={"size": RES, "format": "RGB888"}
+        )
+    )
+    cam.start()
+    time.sleep(2)  # let AE/AF/AWB settle
+
+    # --- YOLO ---
     model = YOLO("yolov8n.pt")
     model.fuse()
 
     t0, n = time.time(), 0
-    last_label = None
-    last_spoken_time = 0
-    SPEAK_COOLDOWN = 2.5
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            continue
+    try:
+        while True:
+            frame = cam.capture_array()  # RGB (H, W, 3)
+            if frame is None:
+                continue
 
-        res = model.predict(frame, imgsz=IMGSZ, conf=CONF, verbose=False)[0]
-        annotated_frame = res.plot()
+            # Run YOLO (expects 3 channels; RGB is fine)
+            res = model.predict(
+                frame,
+                imgsz=IMGSZ,
+                conf=CONF,
+                verbose=False
+            )[0]
 
-        n += 1
-        if n % 10 == 0:
-            fps = n / (time.time() - t0)
-            cv2.putText(annotated_frame, f"FPS: {fps: .1f}", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            # --- Call the callback with detected labels (once per unique label per frame) ---
+            if on_detect is not None and res.boxes is not None:
+                # res.names is a dict: class_id -> class_name
+                names = res.names
+                labels_in_frame = set()
 
-        # detection -> call TTS callback
-        if res.boxes is not None and len(res.boxes) > 0:
-            boxes = res.boxes
-            top_idx = boxes.conf.argmax().item()
-            cls_id = int(boxes.cls[top_idx].item())
-            label = res.names[cls_id]
+                if res.boxes.cls is not None:
+                    for cls_id in res.boxes.cls.tolist():
+                        label = names.get(int(cls_id), None)
+                        if label is not None:
+                            labels_in_frame.add(label)
 
-            now = time.time()
-            if (label != last_label) and (now - last_spoken_time > SPEAK_COOLDOWN):
-                if on_detect is not None:
-                    on_detect(label)
-                last_label = label
-                last_spoken_time = now
+                for label in labels_in_frame:
+                    try:
+                        on_detect(label)
+                    except Exception as e:
+                        # Don't crash detection loop if callback misbehaves
+                        print(f"[VISION] Error in on_detect callback: {e}")
 
-        cv2.imshow("Live Feed", annotated_frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            # --- Annotated frame for display / saving ---
+            annotated = res.plot()  # BGR image suitable for imshow/imwrite
 
-    cap.release()
-    cv2.destroyAllWindows()
+            n += 1
+            if n % 10 == 0:
+                fps = n / (time.time() - t0)
+                cv2.putText(
+                    annotated,
+                    f"FPS: {fps:.1f}",
+                    (10, 24),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                )
+
+            if have_display:
+                cv2.imshow("YOLOv8 IMX708 (press q to quit)", annotated)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+            else:
+                if n % SAVE_EVERY_N == 0:
+                    cv2.imwrite(f"out_{n:05d}.jpg", annotated)
+
+    except KeyboardInterrupt:
+        print("[VISION] KeyboardInterrupt, stopping detection loop.")
+    finally:
+        cam.stop()
+        if have_display:
+            cv2.destroyAllWindows()
+        print("[VISION] Camera and windows closed.")
+
+
+# Optional: allow running this file directly for testing
+def _print_detected(label: str):
+    print(f"[TEST] Detected: {label}")
+
+
+if __name__ == "__main__":
+    # If you run: python object.py
+    # it will just print labels to the console as it detects them.
+    run_object_detection(on_detect=_print_detected)
