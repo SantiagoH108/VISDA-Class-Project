@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>VISDA Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#0b1220; color:#e6eef9; font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding:14px 18px; background:#0f172a; position:sticky; top:0; z-index:10; box-shadow:0 2px 12px rgba(0,0,0,.25); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    header .brand { font-weight:700; letter-spacing:.4px; }
+    .pill { padding:6px 10px; border-radius:999px; background:#1e293b; display:inline-flex; gap:6px; align-items:center; }
+    .wrap { display:grid; grid-template-columns: 2fr 1fr; gap:18px; padding:18px; }
+    .card { background:#0f172a; border-radius:14px; padding:14px; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+    .card h2 { margin:0 0 10px 0; font-size:18px; }
+    .card h3 { margin:16px 0 8px; font-size:15px; opacity:.9; }
+    .live { position:relative; }
+    .live img { width:100%; height:auto; border-radius:12px; display:block; background:#0b1220; }
+    .overlay { position:absolute; left:10px; bottom:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    .overlay .tag { background:rgba(0,0,0,.55); padding:6px 8px; border-radius:8px; font-size:12px; border:1px solid rgba(255,255,255,.08); }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .kv { background:#0b1220; border:1px solid #1e293b; padding:10px; border-radius:10px; }
+    .kv b { display:block; font-size:12px; opacity:.8; margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; }
+    .buttons { margin:10px 0; display:flex; gap:10px; flex-wrap:wrap; }
+    button { background:#10b981; border:0; color:white; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; }
+    button.secondary { background:#3b82f6; }
+    button.warn { background:#ef4444; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    td, th { padding:8px; border-bottom:1px solid #1f2937; text-align:left; }
+    th { font-size:12px; text-transform:uppercase; opacity:.7; }
+    .muted { color:#f59e0b; font-weight:600; }
+    .footer { padding:12px 18px; opacity:.6; font-size:12px; }
+    .banner { background:#1e293b; border-left:3px solid #f59e0b; padding:8px 10px; border-radius:8px; margin:10px 0; display:none; }
+    .ok { border-left-color:#10b981; }
+    @media (max-width: 960px) { .wrap { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<header>
+  <span class="brand">VISDA</span>
+  <span class="pill" id="p_fps">FPS --</span>
+  <span class="pill" id="p_wake">Wakes 0</span>
+  <span class="pill" id="p_muted">Muted: no</span>
+  <span class="pill" id="p_top">Top: --</span>
+</header>
+
+<div class="wrap">
+  <div class="card live">
+    <h2>Live Camera</h2>
+    <img id="video" alt="Live stream" src="/video" />
+    <div class="overlay">
+      <div class="tag" id="ov_fps">FPS --</div>
+      <div class="tag" id="ov_dets">Detections: 0</div>
+    </div>
+    <div class="banner" id="bn_cam">If you don't see video, check camera permission and that no other app is using the camera.</div>
+  </div>
+
+  <div class="card">
+    <h2>Controls & Status</h2>
+    <div class="grid2">
+      <div class="kv">
+        <b>Last Spoken</b>
+        <div id="last_spoken">—</div>
+      </div>
+      <div class="kv">
+        <b>ASR (last heard)</b>
+        <div id="asr_last">—</div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="btnSpeak">Speak Test</button>
+      <button id="btnMute" class="warn">Toggle Mute</button>
+      <button id="btnWake" class="secondary">Force Wake</button>
+    </div>
+
+    <h3>Detections</h3>
+    <table>
+      <thead><tr><th>Label</th><th>Confidence</th></tr></thead>
+      <tbody id="detTable"></tbody>
+    </table>
+    <div class="banner ok" id="bn_ok">Ready.</div>
+  </div>
+</div>
+
+<div class="footer">Hotkeys: <b>S</b> = Speak Test, <b>M</b> = Toggle Mute, <b>W</b> = Force Wake</div>
+
+<script>
+(function(){
+  const $ = sel => document.querySelector(sel);
+  const els = {
+    fps: $("#p_fps"),
+    wake: $("#p_wake"),
+    muted: $("#p_muted"),
+    top: $("#p_top"),
+    ovFps: $("#ov_fps"),
+    ovDets: $("#ov_dets"),
+    last: $("#last_spoken"),
+    asr: $("#asr_last"),
+    detTable: $("#detTable"),
+    bnCam: $("#bn_cam"),
+    bnOk: $("#bn_ok"),
+    video: $("#video"),
+  };
+
+  function setText(el, t){ if(el) el.textContent = t; }
+
+  async function poll(){
+    try{
+      const r = await fetch('/status', {cache:'no-store'});
+      if(!r.ok) throw new Error("status http "+r.status);
+      const j = await r.json();
+
+      const fps = (typeof j.fps === 'number') ? j.fps.toFixed(1) : '--';
+      setText(els.fps, `FPS ${fps}`);
+      setText(els.ovFps, `FPS ${fps}`);
+      setText(els.wake, `Wakes ${j.wake_count ?? 0}`);
+      setText(els.muted, `Muted: ${j.muted ? 'yes' : 'no'}`);
+      setText(els.last, j.last_spoken || '—');
+
+      // last ASR (if exposed in your state/status route later)
+      if (j.last_asr_partial || j.last_asr_final) {
+        setText(els.asr, j.last_asr_final || j.last_asr_partial || '—');
+      }
+
+      const dets = Array.isArray(j.dets) ? j.dets : [];
+      setText(els.ovDets, `Detections: ${dets.length}`);
+      if (dets.length) {
+        const [label, conf] = dets[0];
+        setText(els.top, `Top: ${label} ${(conf*100).toFixed(0)}%`);
+      } else {
+        setText(els.top, 'Top: --');
+      }
+
+      // table
+      els.detTable.innerHTML = '';
+      dets.slice(0, 12).forEach(d=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${d[0]}</td><td>${(d[1]*100).toFixed(0)}%</td>`;
+        els.detTable.appendChild(tr);
+      });
+
+      // ok banner
+      els.bnOk.style.display = 'block';
+      els.bnOk.textContent = 'Ready.';
+    } catch(e){
+      els.bnOk.style.display = 'block';
+      els.bnOk.textContent = 'Status error: ' + e.message;
+      console.error(e);
+    }
+  }
+
+  // Controls
+  $("#btnSpeak").addEventListener('click', async ()=>{
+    await fetch('/api/say', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: 'This is a VISDA test.'})});
+  });
+  $("#btnMute").addEventListener('click', async ()=>{
+    await fetch('/api/mute', {method:'POST'});
+    poll();
+  });
+  $("#btnWake").addEventListener('click', async ()=>{
+    await fetch('/api/force_wake', {method:'POST'});
+  });
+
+  // Hotkeys
+  document.addEventListener('keydown', (e)=>{
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    if (e.key.toLowerCase() === 's') $("#btnSpeak").click();
+    if (e.key.toLowerCase() === 'm') $("#btnMute").click();
+    if (e.key.toLowerCase() === 'w') $("#btnWake").click();
+  });
+
+  // Camera error hint
+  els.video.addEventListener('error', ()=> {
+    els.bnCam.style.display = 'block';
+  });
+  els.video.addEventListener('load', ()=> {
+    els.bnCam.style.display = 'none';
+  });
+
+  // Start polling
+  poll();
+  setInterval(poll, 600);
+})();
+</script>
+</body>
+</html>

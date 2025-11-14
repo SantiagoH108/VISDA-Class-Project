@@ -1,2 +1,9 @@
 .venv/
-venv
+__pycache__/
+*.pyc
+*.wav
+models/
+voices/
+weights/yolov8n.pt
+.env
+
