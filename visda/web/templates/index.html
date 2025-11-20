@@ -69,12 +69,7 @@
       </div>
     </div>
 
-    <div class="buttons">
-      <button id="btnSpeak">Speak Test</button>
-      <button id="btnMute" class="warn">Toggle Mute</button>
-      <button id="btnWake" class="secondary">Force Wake</button>
-    </div>
-
+  
     <h3>Detections</h3>
     <table>
       <thead><tr><th>Label</th><th>Confidence</th></tr></thead>
@@ -91,8 +86,6 @@
   const $ = sel => document.querySelector(sel);
   const els = {
     fps: $("#p_fps"),
-    wake: $("#p_wake"),
-    muted: $("#p_muted"),
     top: $("#p_top"),
     ovFps: $("#ov_fps"),
     ovDets: $("#ov_dets"),
@@ -150,27 +143,6 @@
       console.error(e);
     }
   }
-
-  // Controls
-  $("#btnSpeak").addEventListener('click', async ()=>{
-    await fetch('/api/say', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text: 'This is a VISDA test.'})});
-  });
-  $("#btnMute").addEventListener('click', async ()=>{
-    await fetch('/api/mute', {method:'POST'});
-    poll();
-  });
-  $("#btnWake").addEventListener('click', async ()=>{
-    await fetch('/api/force_wake', {method:'POST'});
-  });
-
-  // Hotkeys
-  document.addEventListener('keydown', (e)=>{
-    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-    if (e.key.toLowerCase() === 's') $("#btnSpeak").click();
-    if (e.key.toLowerCase() === 'm') $("#btnMute").click();
-    if (e.key.toLowerCase() === 'w') $("#btnWake").click();
-  });
 
   // Camera error hint
   els.video.addEventListener('error', ()=> {

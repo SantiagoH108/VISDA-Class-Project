@@ -15,12 +15,34 @@ from .config import HOST, PORT, YOLO_WEIGHTS, VOSK_MODEL_DIR, PIPER_VOICE
 def _bridge_asr_to_orchestrator():
     """Pipe ASR events into the orchestrator."""
     while True:
-        ev = ASR_EVENTS.get()
-        if ev == "WAKE":
-            # start short command window and push the recognized command back as a {"CMD": "..."}
-            asr_after_wake()
-        elif isinstance(ev, dict) and "CMD" in ev:
-            ORCH_EVENTS.put(ev)
+        try:
+            ev = ASR_EVENTS.get()
+            print("[BRIDGE] got ASR event:", ev)
+
+            if ev == "WAKE":
+                try:
+                    # Run the short post-wake ASR window
+                    asr_after_wake()
+                except Exception as e:
+                    print("[BRIDGE] asr_after_wake crashed:", repr(e))
+                finally:
+                    # After command phase ends (or fails), re-arm the wake listener
+                    threading.Thread(target=wake_listener, daemon=True).start()
+
+            elif isinstance(ev, dict) and "CMD" in ev:
+                print("[BRIDGE] forwarding CMD to orchestrator:", ev["CMD"])
+                ORCH_EVENTS.put(ev)
+
+            else:
+                print("[BRIDGE] unknown event:", ev)
+
+        except Exception as e:
+            # This protects the *bridge loop itself* from dying
+            print("[BRIDGE] unexpected error in loop:", repr(e))
+            # then continue to the next event
+            continue
+
+
 
 
 def _orchestrator_runner():
@@ -34,8 +56,6 @@ def _orchestrator_runner():
 
 
 def run():
-    """Entry point used by the root runner (python main.py) or python -m visda.main"""
-    # --- sanity checks (don’t hard-exit if Piper missing; we can fall back to 'say' / 'espeak') ---
     if not os.path.exists(YOLO_WEIGHTS):
         raise SystemExit(f"Missing YOLO weights at: {YOLO_WEIGHTS}")
     if not os.path.isdir(VOSK_MODEL_DIR):

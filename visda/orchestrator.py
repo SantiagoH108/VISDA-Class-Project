@@ -1,9 +1,7 @@
 from .state import STATE
 from .audio.tts import speak
 from .utils.helpers import pick_closest
-from queue import Queue
-
-EVENTS: "Queue[object]" = Queue()
+from .audio.asr import EVENTS
 
 def handle_command(cmd: str):
     t = (cmd or "").lower()
@@ -21,3 +19,26 @@ def handle_command(cmd: str):
         speak(f"This looks like a {friendly}." if conf >= 0.45 else f"I'm not sure, maybe a {friendly}.")
         return
     speak("Say 'what is this' after VISDA.")
+
+from typing import Any
+from .audio.asr import asr_after_wake
+
+
+def orchestrator_loop():
+    """
+    Bridge events from ASR into high-level actions.
+    - 'WAKE' → run post-wake ASR (short command)
+    - {'CMD': text} → handle_command(text)
+    """
+    while True:
+        evt: Any = EVENTS.get()
+
+        # Wakeword detected
+        if evt == "WAKE":
+            asr_after_wake()
+
+        # Command recognized
+        elif isinstance(evt, dict) and "CMD" in evt:
+            cmd = evt["CMD"]
+            handle_command(cmd)
+
