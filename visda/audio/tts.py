@@ -1,79 +1,59 @@
+# visda/audio/tts.py
 import subprocess
 from pathlib import Path
 
 from ..state import STATE
 
-# Path to your Piper voice model (.onnx)
-# Adjust this if your file is named or located differently.
 ROOT = Path(__file__).resolve().parents[2]
 PIPER_VOICE = ROOT / "voices" / "en_US-danny-low.onnx"
 OUT_WAV = Path("/tmp/visda_tts.wav")
 
 
 def _piper_say(text: str) -> None:
-    """Run Piper CLI to synthesize and then play the audio."""
+    """Run Piper CLI to synthesize and play audio via aplay."""
     if not PIPER_VOICE.is_file():
-        print(f"[TTS] Piper voice not found at {PIPER_VOICE}")
+        print("[tts] no-voice")
         return
 
     synth_cmd = [
         "piper",
-        "--model",
-        str(PIPER_VOICE),
-        "--output_file",
-        str(OUT_WAV),
+        "--model", str(PIPER_VOICE),
+        "--output_file", str(OUT_WAV),
     ]
-    print("[TTS] running:", " ".join(synth_cmd))
 
     try:
         proc = subprocess.run(
             synth_cmd,
             input=text.encode("utf-8"),
-            capture_output=True,
+            capture_output=False,
         )
     except FileNotFoundError:
-        print("[TTS] 'piper' command not found. Is Piper installed?")
+        print("[tts] no-piper")
         return
-    except Exception as e:
-        print("[TTS] Error running piper:", e)
+    except Exception:
+        print("[tts] err-piper")
         return
-
-    print("[TTS] piper return code:", proc.returncode)
-    if proc.stdout:
-        print("[TTS] piper stdout:", proc.stdout.decode(errors="ignore"))
-    if proc.stderr:
-        print("[TTS] piper stderr:", proc.stderr.decode(errors="ignore"))
 
     if proc.returncode != 0:
-        print(f"[TTS] Piper synth failed with code {proc.returncode}")
+        print("[tts] fail")
         return
 
-    # Make sure file exists
     if not OUT_WAV.is_file():
-        print(f"[TTS] Expected WAV not found at {OUT_WAV}")
+        print("[tts] no-wav")
         return
 
-    # 2) Play with aplay (ALSA)
-    play_cmd = ["aplay", "-v", str(OUT_WAV)]  # -v = verbose ALSA output
-    print("[TTS] running:", " ".join(play_cmd))
+    play_cmd = ["aplay", str(OUT_WAV)]
     try:
-        proc2 = subprocess.run(
-            play_cmd,
-            capture_output=True,
-        )
+        proc2 = subprocess.run(play_cmd, capture_output=False)
     except FileNotFoundError:
-        print("[TTS] 'aplay' not found. Install alsa-utils.")
+        print("[tts] no-aplay")
         return
-    except Exception as e:
-        print("[TTS] Error running aplay:", e)
+    except Exception:
+        print("[tts] err-play")
         return
 
-    print("[TTS] aplay return code:", proc2.returncode)
-    if proc2.stdout:
-        print("[TTS] aplay stdout:", proc2.stdout.decode(errors="ignore"))
-    if proc2.stderr:
-        print("[TTS] aplay stderr:", proc2.stderr.decode(errors="ignore"))
-
+    if proc2.returncode != 0:
+        print("[tts] play-fail")
 
 
 def speak(text: str) -> None:
@@ -81,16 +61,14 @@ def speak(text: str) -> None:
     if not text:
         return
 
-    # Check mute + mark TTS as busy
     with STATE.lock:
         if getattr(STATE, "muted", False):
-            print("[TTS] Muted; skipping:", text)
+            print("[tts] muted")
             return
         STATE.tts_busy = True
         STATE.last_spoken = text
 
     try:
-        print(f"[TTS] Piper speaking: '{text}'")
         _piper_say(text)
     finally:
         with STATE.lock:
@@ -99,4 +77,5 @@ def speak(text: str) -> None:
 
 if __name__ == "__main__":
     speak("This is VISDA speaking using Piper on the Raspberry Pi.")
+
 

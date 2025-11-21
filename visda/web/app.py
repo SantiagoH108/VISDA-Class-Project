@@ -16,9 +16,6 @@ def create_app():
             dets = STATE.dets[:8]
             data = dict(
                 fps=STATE.fps,
-                wake_count=STATE.wake_count,
-                muted=STATE.muted,
-                last_spoken=STATE.last_spoken,
                 dets=dets,
             )
         return jsonify(data)
@@ -29,13 +26,6 @@ def create_app():
         speak(text)
         return {"ok": True}
 
-    @app.post("/api/mute")
-    def api_mute():
-        with STATE.lock:
-            STATE.muted = not STATE.muted
-            muted = STATE.muted
-        speak("Muted." if muted else "Unmuted.")
-        return {"ok": True, "muted": muted}
 
     @app.post("/api/force_wake")
     def force_wake():
