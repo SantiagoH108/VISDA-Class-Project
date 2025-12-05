@@ -14,10 +14,18 @@ def bridge_asr_to_orch():
         ev = ASR_EVENTS.get()
 
         if ev == "WAKE":
-            asr_after_wake()
+            print("WAKE")
+            try:
+                asr_after_wake()
+            except Exception as e:
+                print("error")
+            finally:
+                threading.Thread(target=wake_listener, daemon=True).start()
 
         elif isinstance(ev, dict) and "CMD" in ev:
             ORCH_EVENTS.put(ev)
+        else:
+            pass
 
 
 

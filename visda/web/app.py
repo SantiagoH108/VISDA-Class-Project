@@ -9,6 +9,7 @@ def create_app():
     @app.get("/")
     def index():
         return render_template("index.html")
+    
 
     @app.get("/status")
     def status():
@@ -20,18 +21,6 @@ def create_app():
             )
         return jsonify(data)
 
-    @app.post("/api/say")
-    def api_say():
-        text = (request.json or {}).get("text", "Hello from VISDA")
-        speak(text)
-        return {"ok": True}
-
-
-    @app.post("/api/force_wake")
-    def force_wake():
-        from ..audio.asr import EVENTS
-        EVENTS.put("WAKE")
-        return {"ok": True}
 
     def gen():
         while True:

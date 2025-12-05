@@ -12,7 +12,7 @@ PIPER_VOICE      = os.environ.get("VISDA_VOICE",  P("voices","en_US-danny-low.on
 CAM_INDEX   = int(os.environ.get("VISDA_CAM_INDEX", "0"))
 FRAME_W, FRAME_H, FPS_REQ = 640, 480, 15
 IMGSZ       = int(os.environ.get("VISDA_IMGSZ", "320"))
-CONF_THRES  = float(os.environ.get("VISDA_CONF", "0.45"))
+CONF_THRES  = float(os.environ.get("VISDA_CONF", "0.35"))
 
 # ASR
 SAMPLE_RATE = 44100

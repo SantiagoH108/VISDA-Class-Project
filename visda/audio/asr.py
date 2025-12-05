@@ -10,7 +10,7 @@ import vosk
 from rapidfuzz import fuzz
 
 from ..state import STATE
-from ..config import SAMPLE_RATE, BLOCKSIZE, POST_WAKE_SEC, INPUT_HINT, VOSK_MODEL_DIR
+from ..config import SAMPLE_RATE, BLOCKSIZE, POST_WAKE_SEC, VOSK_MODEL_DIR
 from .tts import speak
 
 EVENTS: Queue = Queue()
@@ -82,8 +82,9 @@ def wake_listener():
         rms = float(np.sqrt(np.mean(mono.astype(np.float32) ** 2)) + 1e-9)
 
         b = baseline[0]
-        if rms < max(200, b * 1.2):
+        if rms < 300:
             baseline[0] = b * 0.98 + rms * 0.02
+            baseline[0] = max(40.0, min(120.0,baseline[0]))
 
         gate = max(MIN_RMS, baseline[0] * 2.5)
 
@@ -134,6 +135,8 @@ def wake_listener():
     finally:
         WAKE_STREAM_OPEN.clear()
         print("[asr] stop")
+    while WAKING.is_set():
+        time.sleep(0.05)
 
 
 def asr_after_wake():
